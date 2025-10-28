@@ -20,7 +20,7 @@ slice_colors = [
 ]
 
 min_step = 2.0 #minimum degrees per frame when almost stopped
-accel_decel_factor = 0.15 #fraction of remaining spin used per frame
+accel_decel_factor = 0.25 #fraction of remaining spin used per frame
 fps_ms = 16 #frames per second thats pretty self explanatory
 full_rotations = (3, 6) #randomly do between 3 and 6 full rotations before landing
 
@@ -151,3 +151,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = SpinWheelApp(root)
     root.mainloop() #this creates the tk app
+
