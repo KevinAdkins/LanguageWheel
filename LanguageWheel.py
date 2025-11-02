@@ -24,6 +24,18 @@ accel_decel_factor = 0.25 #fraction of remaining spin used per frame
 fps_ms = 16 #frames per second thats pretty self explanatory
 full_rotations = (3, 6) #randomly do between 3 and 6 full rotations before landing
 
+#confetti
+CONFETTI_COUNT = 120
+CONFETTI_COLORS = [
+     "#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93", "#ff7f50", "#00c2a8"
+]
+CONFETTI_MIN_SPEED = 4
+CONFETTI_MAX_SPEED = 10
+CONFETTI_GRAVITY = 0.35
+CONFETTI_DRAG = 0.995 #air resistance, 1.0 = gentle
+CONFETTI_SPIN = 0.3
+CONFETTI_LIFETIME = 90
+CONFETTI_SIZE = (4,9)
 class SpinWheelApp:
     def __init__(self, root): #__init__ sets up the self attributes
         self.root = root
@@ -40,6 +52,7 @@ class SpinWheelApp:
         self.spin_remaining = 0.0
         self.target_label = None
 
+        self.confetti = []
         self.draw_wheel() 
         self.draw_pointer() #pointer binds at 12 o'clock
 
@@ -51,7 +64,7 @@ class SpinWheelApp:
         )
 
     def draw_wheel(self):
-        self.canvas.delete("wheel") #delete previous wheel
+        self.canvas.delete("wheel") #delete previous wheel and keeps confetti and UI
 
         x0 = center[0] - radius
         y0 = center[1] - radius
@@ -137,6 +150,7 @@ class SpinWheelApp:
             self.current_angle = (self.current_angle) % 360
             self.draw_wheel()
             self.canvas.itemconfigure(self.status_text_id, text=f"Landed on: {self.target_label}, go make a project")
+            self.start_confetti() #launches confetti when result appears           
             return
         
         step = max(min_step, self.spin_remaining * accel_decel_factor)
@@ -147,8 +161,90 @@ class SpinWheelApp:
         self.draw_wheel()
         self.root.after(fps_ms, self.step_spin)
 
+    def clear_confetti(self):
+        self.canvas.delete("confetti")
+        self.confetti = []
+
+    def start_confetti(self):
+        #confetti spawn from the pointer
+        px = center[0]
+        py = center[1]  - (radius + 10) + 8
+
+        for _ in range(CONFETTI_COUNT):
+            #random size and color
+            size = random.randint(CONFETTI_SIZE[0], CONFETTI_SIZE[1])
+            color = random.choice(CONFETTI_COLORS)
+
+            #random direction and speed (downward)
+            angle = random.uniform(-math.pi/2 - 0.8, -math.pi/2 + 0.8) #fan down
+            speed = random.uniform(CONFETTI_MIN_SPEED, CONFETTI_MAX_SPEED)
+
+            vx = speed * math.cos(angle)
+            vy = speed * math.sin(angle) + 2  #a little extra downward kick
+
+            #each piece is a rotated square
+            omega = random.uniform(-CONFETTI_SPIN, CONFETTI_SPIN)  #angular velocity
+
+            #create the square (we’ll keep it simple as a rectangle; rotation is visualized by wobble)
+            pid = self.canvas.create_rectangle(
+                px, py, px + size, py + size,
+                fill=color, outline="", tags=("confetti",)
+            )
+
+            #store particle data
+            self.confetti.append({
+                "id": pid,
+                "x": px, "y": py,
+                "vx": vx, "vy": vy,
+                "ay": CONFETTI_GRAVITY,
+                "life": CONFETTI_LIFETIME,
+                "angle": 0.0,
+                "omega": omega,
+                "size": size,
+            })
+
+        #kick off the animation loop
+        self.animate_confetti()
+
+    def animate_confetti(self):
+        alive = []
+        for p in self.confetti:
+            #update velocity with gravity and drag
+            p["vy"] += p["ay"]
+            p["vx"] *= CONFETTI_DRAG
+            p["vy"] *= CONFETTI_DRAG
+
+            #update position
+            p["x"] += p["vx"]
+            p["y"] += p["vy"]
+
+            #spin (we’ll fake rotation by nudging the rect corners based on angle)
+            p["angle"] += p["omega"]
+
+            #compute wobble offsets for a fun effect
+            wobble = math.sin(p["angle"]) * 0.5 * p["size"]
+
+            #move rectangle to new position
+            x, y, s = p["x"], p["y"], p["size"]
+            #apply a small horizontal wobble by shifting left/right corners
+            self.canvas.coords(p["id"], x - wobble, y, x + s + wobble, y + s)
+
+            #fade out near end of life, could change fill to lighter
+            p["life"] -= 1
+            if p["life"] > 0 and (0 <= x <= canvas_size) and (y <= canvas_size + 50):
+                alive.append(p)
+            else:
+                #delete dead/out-of-bounds particles
+                self.canvas.delete(p["id"])
+
+        #keep only particles still alive
+        self.confetti = alive
+
+        #keep animating while any particles remain
+        if self.confetti:
+            self.root.after(fps_ms, self.animate_confetti)
+
 if __name__ == "__main__":
     root = tk.Tk()
     app = SpinWheelApp(root)
     root.mainloop() #this creates the tk app
-
